@@ -74,8 +74,10 @@ paddle = pygame.Rect(
 BALL_RADIUS = 10
 
 # Начальная скорость мяча
-ball_speed_x = 5
-ball_speed_y = -5
+INITIAL_BALL_SPEED_X = 5
+INITIAL_BALL_SPEED_Y = -5
+ball_speed_x = INITIAL_BALL_SPEED_X
+ball_speed_y = INITIAL_BALL_SPEED_Y
 
 # Позиция мяча
 ball_x = WIDTH // 2
@@ -110,11 +112,13 @@ def create_bricks():
     Каждый кирпич сохраняется как словарь:
     {
         "rect": прямоугольник кирпича,
-        "color": цвет кирпича
+        "color": цвет кирпича,
+        "points": количество очков за кирпич
     }
     """
     brick_list = []
     colors = [RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE]
+    points_by_row = [20, 20, 15, 15, 10, 10]
 
     total_width = BRICK_COLS * BRICK_WIDTH + (BRICK_COLS - 1) * BRICK_GAP
     start_x = (WIDTH - total_width) // 2
@@ -126,10 +130,12 @@ def create_bricks():
 
             brick_rect = pygame.Rect(x, y, BRICK_WIDTH, BRICK_HEIGHT)
             brick_color = colors[row % len(colors)]
+            brick_points = points_by_row[row % len(points_by_row)]
 
             brick_list.append({
                 "rect": brick_rect,
-                "color": brick_color
+                "color": brick_color,
+                "points": brick_points
             })
 
     return brick_list
@@ -147,11 +153,15 @@ bricks = create_bricks()
 score = 0
 lives = 3
 
+# Сколько кирпичей уже разрушено
+broken_bricks = 0
+
 # Возможные состояния:
-# "start"   - стартовый экран
-# "play"    - игра идет
-# "win"     - победа
-# "gameover"- поражение
+# "start"    - стартовый экран
+# "play"     - игра идет
+# "pause"    - пауза
+# "win"      - победа
+# "gameover" - поражение
 game_state = "start"
 
 
@@ -165,18 +175,23 @@ def reset_ball_and_paddle():
     Возвращает платформу и мяч в начальное положение.
     Мяч снова будет ждать нажатия пробела.
     """
-    global ball_x, ball_y, ball_speed_x, ball_speed_y, ball_moving, paddle
+    global ball_x, ball_y, ball_speed_x, ball_speed_y, ball_moving
 
     paddle.x = WIDTH // 2 - PADDLE_WIDTH // 2
     paddle.y = HEIGHT - 60
 
-    ball_x = WIDTH // 2
-    ball_y = HEIGHT // 2
+    # Мяч ставится на платформу, чтобы старт выглядел естественно
+    ball_x = paddle.centerx
+    ball_y = paddle.top - BALL_RADIUS
 
-    ball_speed_x = 5
-    ball_speed_y = -5
+    ball_speed_x = INITIAL_BALL_SPEED_X
+    ball_speed_y = INITIAL_BALL_SPEED_Y
 
     ball_moving = False
+
+
+# Выставляем стартовое положение мяча сразу на платформу
+reset_ball_and_paddle()
 
 
 # ============================================================
@@ -193,10 +208,11 @@ def reset_game():
     - возвращает мяч и платформу в начало
     - переводит игру в режим start
     """
-    global score, lives, bricks, game_state
+    global score, lives, bricks, game_state, broken_bricks
 
     score = 0
     lives = 3
+    broken_bricks = 0
     bricks = create_bricks()
     reset_ball_and_paddle()
     game_state = "start"
@@ -265,10 +281,20 @@ def draw_start_screen():
     """
     screen.fill(BLACK)
     draw_text("АРКАНОИД", font_large, WHITE, WIDTH // 2, 170, center=True)
-    draw_text("Управление: стрелки влево / вправо", font_medium, GRAY, WIDTH // 2, 270, center=True)
-    draw_text("Пробел — запуск мяча", font_medium, GRAY, WIDTH // 2, 320, center=True)
-    draw_text("Разбей все кирпичи и не дай мячу упасть вниз", font_small, WHITE, WIDTH // 2, 390, center=True)
-    draw_text("Нажми ENTER, чтобы начать", font_medium, YELLOW, WIDTH // 2, 480, center=True)
+    draw_text("Управление: стрелки влево / вправо", font_medium, GRAY, WIDTH // 2, 250, center=True)
+    draw_text("Пробел — запуск мяча", font_medium, GRAY, WIDTH // 2, 300, center=True)
+    draw_text("P — пауза", font_medium, GRAY, WIDTH // 2, 350, center=True)
+    draw_text("Разбей все кирпичи и не дай мячу упасть вниз", font_small, WHITE, WIDTH // 2, 410, center=True)
+    draw_text("Нажми ENTER, чтобы начать", font_medium, YELLOW, WIDTH // 2, 490, center=True)
+
+
+def draw_pause_screen():
+    """
+    Рисует экран паузы поверх игрового поля.
+    """
+    draw_game()
+    draw_text("ПАУЗА", font_large, YELLOW, WIDTH // 2, HEIGHT // 2 - 20, center=True)
+    draw_text("Нажми P, чтобы продолжить", font_medium, WHITE, WIDTH // 2, HEIGHT // 2 + 40, center=True)
 
 
 def draw_win_screen():
@@ -277,8 +303,8 @@ def draw_win_screen():
     """
     screen.fill(BLACK)
     draw_text("ПОБЕДА!", font_large, GREEN, WIDTH // 2, 220, center=True)
-    draw_text(f"Ваш счет: {score}", font_medium, WHITE, WIDTH // 2, 310, center=True)
-    draw_text("Нажми R, чтобы сыграть снова", font_medium, YELLOW, WIDTH // 2, 420, center=True)
+    draw_text(f"Ваш счет: {score}", font_medium, WHITE, WIDTH // 2, 300, center=True)
+    draw_text("Нажми R, чтобы сыграть снова", font_medium, YELLOW, WIDTH // 2, 400, center=True)
 
 
 def draw_gameover_screen():
@@ -287,8 +313,8 @@ def draw_gameover_screen():
     """
     screen.fill(BLACK)
     draw_text("ИГРА ОКОНЧЕНА", font_large, RED, WIDTH // 2, 220, center=True)
-    draw_text(f"Ваш счет: {score}", font_medium, WHITE, WIDTH // 2, 310, center=True)
-    draw_text("Нажми R, чтобы начать заново", font_medium, YELLOW, WIDTH // 2, 420, center=True)
+    draw_text(f"Ваш счет: {score}", font_medium, WHITE, WIDTH // 2, 300, center=True)
+    draw_text("Нажми R, чтобы начать заново", font_medium, YELLOW, WIDTH // 2, 400, center=True)
 
 
 # ============================================================
@@ -301,6 +327,8 @@ def move_paddle():
     """
     Двигает платформу влево или вправо по нажатию клавиш.
     """
+    global ball_x, ball_y
+
     keys = pygame.key.get_pressed()
 
     if keys[pygame.K_LEFT]:
@@ -315,6 +343,11 @@ def move_paddle():
 
     if paddle.right > WIDTH:
         paddle.right = WIDTH
+
+    # Пока мяч не запущен, он движется вместе с платформой
+    if not ball_moving:
+        ball_x = paddle.centerx
+        ball_y = paddle.top - BALL_RADIUS
 
 
 # ============================================================
@@ -359,13 +392,11 @@ def handle_wall_collisions():
         ball_speed_y = -ball_speed_y
 
     # Падение мяча вниз
-    if ball_y - BALL_RADIUS > HEIGHT:
+    if ball_y + BALL_RADIUS >= HEIGHT:
         lives -= 1
 
         if lives > 0:
             reset_ball_and_paddle()
-            # После потери жизни продолжаем игру
-            global game_state
             game_state = "play"
         else:
             game_state = "gameover"
@@ -381,7 +412,7 @@ def handle_paddle_collision():
     """
     Проверяет столкновение мяча с платформой.
     """
-    global ball_speed_y, ball_speed_x
+    global ball_y, ball_speed_y, ball_speed_x
 
     ball_rect = pygame.Rect(
         ball_x - BALL_RADIUS,
@@ -391,6 +422,9 @@ def handle_paddle_collision():
     )
 
     if ball_rect.colliderect(paddle) and ball_speed_y > 0:
+        # Ставим мяч прямо над платформой, чтобы он не застревал в ней
+        ball_y = paddle.top - BALL_RADIUS
+
         # Отражаем мяч вверх
         ball_speed_y = -abs(ball_speed_y)
 
@@ -399,7 +433,7 @@ def handle_paddle_collision():
         difference = ball_x - paddle_center
 
         # Меняем горизонтальную скорость в зависимости от места удара
-        ball_speed_x = difference // 18
+        ball_speed_x = int(difference / 18)
 
         # Чтобы мяч не летел строго вертикально слишком часто
         if ball_speed_x == 0:
@@ -420,7 +454,7 @@ def handle_brick_collision():
     - прибавляет очки
     - меняет направление мяча
     """
-    global ball_speed_y, score, game_state
+    global ball_speed_x, ball_speed_y, score, game_state, broken_bricks
 
     ball_rect = pygame.Rect(
         ball_x - BALL_RADIUS,
@@ -430,10 +464,39 @@ def handle_brick_collision():
     )
 
     for brick in bricks[:]:
-        if ball_rect.colliderect(brick["rect"]):
+        brick_rect = brick["rect"]
+
+        if ball_rect.colliderect(brick_rect):
+            overlap_left = ball_rect.right - brick_rect.left
+            overlap_right = brick_rect.right - ball_rect.left
+            overlap_top = ball_rect.bottom - brick_rect.top
+            overlap_bottom = brick_rect.bottom - ball_rect.top
+
+            min_overlap_x = min(overlap_left, overlap_right)
+            min_overlap_y = min(overlap_top, overlap_bottom)
+
+            # Определяем, был удар скорее сбоку или сверху/снизу
+            if min_overlap_x < min_overlap_y:
+                ball_speed_x = -ball_speed_x
+            else:
+                ball_speed_y = -ball_speed_y
+
             bricks.remove(brick)
-            score += 10
-            ball_speed_y = -ball_speed_y
+            score += brick["points"]
+            broken_bricks += 1
+
+            # Каждые 5 разбитых кирпичей немного ускоряем мяч
+            if broken_bricks % 5 == 0:
+                if ball_speed_x > 0:
+                    ball_speed_x += 1
+                else:
+                    ball_speed_x -= 1
+
+                if ball_speed_y > 0:
+                    ball_speed_y += 1
+                else:
+                    ball_speed_y -= 1
+
             break
 
     # Если все кирпичи уничтожены — победа
@@ -471,6 +534,13 @@ while running:
             if game_state == "play" and event.key == pygame.K_SPACE:
                 ball_moving = True
 
+            # Пауза и снятие с паузы
+            if event.key == pygame.K_p:
+                if game_state == "play":
+                    game_state = "pause"
+                elif game_state == "pause":
+                    game_state = "play"
+
             # Перезапуск после победы или поражения
             if game_state in ("win", "gameover") and event.key == pygame.K_r:
                 reset_game()
@@ -496,6 +566,12 @@ while running:
     # --------------------------------------------------------
     elif game_state == "start":
         draw_start_screen()
+
+    # --------------------------------------------------------
+    # ОТРИСОВКА ПАУЗЫ
+    # --------------------------------------------------------
+    elif game_state == "pause":
+        draw_pause_screen()
 
     # --------------------------------------------------------
     # ОТРИСОВКА ЭКРАНА ПОБЕДЫ
